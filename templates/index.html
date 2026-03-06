@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KABUTracker</title>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f0f4f8;
+      --surface: #ffffff;
+      --border: #dde3ec;
+      --text: #1a202c;
+      --text-sub: #64748b;
+      --blue: #2563eb;
+      --blue-hover: #1d4ed8;
+      --blue-light: #eff6ff;
+      --blue-mid: #bfdbfe;
+      --positive: #16a34a;
+      --negative: #dc2626;
+      --predict: #0891b2;
+      --predict-light: #ecfeff;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      height: 60px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      gap: 16px;
+    }
+    .header-logo { display: flex; align-items: center; gap: 8px; }
+    .header-logo .dot { width: 10px; height: 10px; background: var(--blue); border-radius: 50%; }
+    header h1 { font-size: 1.2rem; font-weight: 700; color: var(--blue); letter-spacing: -0.02em; }
+
+    /* ── Hero / Compact search ── */
+    #search-area {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 72px 20px 52px; transition: padding 0.25s;
+    }
+    #search-area.compact {
+      flex-direction: row; align-items: center; gap: 10px;
+      padding: 14px 20px; margin-bottom: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .search-hero-title { font-size: 2rem; font-weight: 700; color: var(--text); margin-bottom: 8px; text-align: center; }
+    .search-hero-sub { font-size: 0.93rem; color: var(--text-sub); line-height: 1.8; margin-bottom: 28px; text-align: center; }
+    .search-hero-sub strong { color: var(--blue); }
+    #search-area.compact .search-hero-title,
+    #search-area.compact .search-hero-sub,
+    #search-area.compact .examples { display: none; }
+
+    .search-row { display: flex; gap: 8px; width: 100%; max-width: 600px; }
+    #search-area.compact .search-row { max-width: none; flex: 1; }
+
+    .search-row input {
+      flex: 1; background: var(--bg); border: 1.5px solid var(--border); color: var(--text);
+      padding: 13px 18px; border-radius: 10px; font-size: 1rem; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    #search-area.compact .search-row input { padding: 7px 14px; font-size: 0.9rem; border-radius: 8px; }
+    .search-row input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+
+    .search-row select {
+      background: var(--bg); border: 1.5px solid var(--border); color: var(--text);
+      padding: 13px 12px; border-radius: 10px; font-size: 0.95rem; cursor: pointer; outline: none;
+    }
+    #search-area.compact .search-row select { padding: 7px 10px; font-size: 0.88rem; border-radius: 8px; }
+
+    .search-row button {
+      background: var(--blue); color: #fff; border: none; padding: 13px 32px;
+      border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 1rem; transition: background 0.2s; white-space: nowrap;
+    }
+    #search-area.compact .search-row button { padding: 7px 22px; font-size: 0.9rem; border-radius: 8px; }
+    .search-row button:hover { background: var(--blue-hover); }
+
+    /* ── Tabs ── */
+    .tab-nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex;
+      gap: 0;
+    }
+    .tab-btn {
+      padding: 12px 24px;
+      border: none;
+      background: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-sub);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* ── Layout ── */
+    main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ── Shared ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .card-accent-blue { border-left: 4px solid var(--blue); }
+    .card-accent-cyan { border-left: 4px solid var(--predict); }
+    .card h3 {
+      font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 14px;
+    }
+    .card h3.blue { color: var(--blue); }
+    .card h3.cyan { color: var(--predict); }
+
+    .spinner-wrap { text-align: center; padding: 60px; color: var(--text-sub); }
+    .spinner {
+      width: 40px; height: 40px; border: 3px solid var(--blue-mid);
+      border-top-color: var(--blue); border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      background: #fef2f2; border: 1px solid #fecaca; color: var(--negative);
+      padding: 14px 18px; border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem;
+    }
+
+    /* ── Analyze section ── */
+    .examples { margin-top: 24px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .examples span {
+      background: var(--surface); border: 1.5px solid var(--border); color: var(--text-sub);
+      padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 0.83rem; transition: all 0.2s;
+    }
+    .examples span:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+    .stock-header { display: none; }
+    .stock-header.card { border-left: 4px solid var(--blue); }
+    .stock-header .name { font-size: 1.35rem; font-weight: 700; }
+    .stock-header .ticker-badge {
+      display: inline-block; background: var(--blue-light); border: 1px solid var(--blue-mid);
+      padding: 2px 10px; border-radius: 6px; font-size: 0.8rem; color: var(--blue); font-weight: 600; margin-left: 10px;
+    }
+    .stock-header .meta { color: var(--text-sub); font-size: 0.83rem; margin-top: 4px; }
+    .stock-header .price-row { display: flex; align-items: baseline; gap: 12px; margin-top: 10px; }
+    .stock-header .price { font-size: 2rem; font-weight: 700; }
+    .stock-header .change { font-size: 1rem; font-weight: 600; }
+    .positive { color: var(--positive); }
+    .negative { color: var(--negative); }
+
+    .metrics-grid {
+      display: none; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      gap: 10px; margin-bottom: 16px;
+    }
+    .metric-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; transition: box-shadow 0.2s;
+    }
+    .metric-card:hover { box-shadow: 0 2px 8px rgba(37,99,235,0.1); }
+    .metric-card .label { font-size: 0.72rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .metric-card .value { font-size: 1.05rem; font-weight: 600; }
+
+    #chart-container { display: none; }
+    #chart-container.card { padding: 8px; }
+
+    .chart-toolbar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px 0;
+      flex-wrap: wrap;
+    }
+    .chart-type-btn {
+      padding: 5px 14px; border-radius: 6px; border: 1.5px solid var(--border);
+      background: var(--bg); color: var(--text-sub); font-size: 0.82rem;
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .chart-type-btn.active {
+      background: var(--blue); color: #fff; border-color: var(--blue);
+    }
+    .chart-type-btn:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
+    .intraday-period {
+      margin-left: auto; display: none; gap: 4px;
+    }
+    .intraday-period.show { display: flex; }
+    .intraday-period button {
+      padding: 4px 10px; border-radius: 6px; border: 1.5px solid var(--border);
+      background: var(--bg); color: var(--text-sub); font-size: 0.8rem;
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .intraday-period button.active { background: var(--blue-light); color: var(--blue); border-color: var(--blue-mid); }
+    .chart-loading {
+      display: none; text-align: center; padding: 40px;
+      color: var(--text-sub); font-size: 0.9rem;
+    }
+
+    .predict-panel { display: none; }
+    .predict-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+    .predict-controls label { font-size: 0.85rem; color: var(--text-sub); }
+    .predict-controls select {
+      background: var(--bg); border: 1.5px solid var(--border); color: var(--text);
+      padding: 6px 12px; border-radius: 8px; font-size: 0.88rem; outline: none;
+    }
+    .predict-controls button {
+      background: var(--predict); color: #fff; border: none; padding: 7px 18px;
+      border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.88rem; transition: background 0.2s;
+    }
+    .predict-controls button:hover { background: #0e7490; }
+    .predict-result { display: none; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    .predict-result.show { display: grid; }
+    .pred-card {
+      background: var(--predict-light); border: 1px solid #a5f3fc; border-radius: 10px; padding: 12px 16px;
+    }
+    .pred-card .label { font-size: 0.7rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .pred-card .value { font-size: 1.02rem; font-weight: 600; }
+    .pred-loading { display: none; color: var(--text-sub); font-size: 0.88rem; margin-top: 8px; }
+
+    .summary-card { display: none; }
+    .summary-card p { font-size: 0.85rem; color: var(--text-sub); line-height: 1.8; }
+
+    /* ── Compare section ── */
+    .compare-input-area {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .compare-input-area h3 { font-size: 0.82rem; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; }
+    .ticker-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; min-height: 36px; align-items: center; }
+    .chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600; color: #fff;
+    }
+    .chip .remove {
+      cursor: pointer; opacity: 0.7; font-size: 1rem; line-height: 1; transition: opacity 0.15s;
+    }
+    .chip .remove:hover { opacity: 1; }
+    .compare-add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .compare-add-row input {
+      background: var(--bg); border: 1.5px solid var(--border); color: var(--text);
+      padding: 7px 14px; border-radius: 8px; font-size: 0.9rem; width: 160px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .compare-add-row input:focus { border-color: var(--blue); }
+    .btn-add {
+      background: var(--blue-light); color: var(--blue); border: 1.5px solid var(--blue-mid);
+      padding: 7px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.88rem; transition: background 0.2s;
+    }
+    .btn-add:hover { background: var(--blue-mid); }
+    .compare-add-row select {
+      background: var(--bg); border: 1.5px solid var(--border); color: var(--text);
+      padding: 7px 10px; border-radius: 8px; font-size: 0.88rem; outline: none; cursor: pointer;
+    }
+    .btn-compare {
+      background: var(--blue); color: #fff; border: none; padding: 7px 22px;
+      border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; transition: background 0.2s;
+    }
+    .btn-compare:hover { background: var(--blue-hover); }
+    .example-sets { margin-top: 12px; font-size: 0.8rem; color: var(--text-sub); }
+    .example-sets span { cursor: pointer; color: var(--blue); text-decoration: underline; margin-left: 8px; }
+    .example-sets span:hover { color: var(--blue-hover); }
+
+    #compare-results { display: none; }
+
+    /* パフォーマンスチャート */
+    #perf-chart-container.card { padding: 8px; }
+
+    /* 指標比較テーブル */
+    .compare-table-wrap { overflow-x: auto; }
+    table.compare-table {
+      width: 100%; border-collapse: collapse; font-size: 0.87rem;
+    }
+    .compare-table th {
+      text-align: left; padding: 10px 14px; background: var(--bg);
+      border-bottom: 2px solid var(--border); font-weight: 600; white-space: nowrap;
+    }
+    .compare-table th.stock-col { text-align: center; }
+    .compare-table td {
+      padding: 9px 14px; border-bottom: 1px solid var(--border);
+      text-align: center; white-space: nowrap;
+    }
+    .compare-table td.row-label { text-align: left; color: var(--text-sub); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; background: var(--bg); }
+    .compare-table tr:hover td { background: var(--blue-light); }
+    .compare-table tr:hover td.row-label { background: #e0eafd; }
+    .stock-header-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .stock-dot { width: 10px; height: 10px; border-radius: 50%; margin-bottom: 2px; }
+    .stock-name-sm { font-size: 0.75rem; color: var(--text-sub); }
+    .best { color: var(--positive); font-weight: 700; }
+    .worst { color: var(--negative); font-weight: 700; }
+
+    /* 相関係数 */
+    .corr-grid { display: inline-grid; gap: 3px; }
+    .corr-cell {
+      width: 64px; height: 48px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; border-radius: 6px;
+      font-size: 0.78rem; font-weight: 600;
+    }
+    .corr-label { font-size: 0.68rem; color: var(--text-sub); margin-top: 2px; }
+
+    /* compare loading */
+    #compare-loading { display: none; }
+    #compare-error { display: none; }
+
+    /* ── Ranking section ── */
+    .ranking-header {
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .market-tabs { display: flex; gap: 6px; }
+    .market-tab {
+      padding: 7px 20px; border-radius: 8px; border: 1.5px solid var(--border);
+      background: var(--surface); color: var(--text-sub); font-size: 0.88rem;
+      font-weight: 700; cursor: pointer; transition: all 0.2s;
+    }
+    .market-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .market-tab:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
+    .ranking-meta {
+      margin-left: auto; font-size: 0.8rem; color: var(--text-sub);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .btn-refresh {
+      background: var(--blue-light); color: var(--blue); border: 1.5px solid var(--blue-mid);
+      padding: 6px 14px; border-radius: 8px; font-size: 0.83rem; font-weight: 700;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-refresh:hover { background: var(--blue-mid); }
+    .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .ranking-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .ranking-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .ranking-card-header {
+      padding: 14px 18px; display: flex; align-items: center; gap: 8px;
+      font-size: 0.88rem; font-weight: 700;
+    }
+    .ranking-card-header.gainers { background: #f0fdf4; color: var(--positive); border-bottom: 1px solid #bbf7d0; }
+    .ranking-card-header.losers  { background: #fef2f2; color: var(--negative); border-bottom: 1px solid #fecaca; }
+    .ranking-card-header .icon { font-size: 1.1rem; }
+
+    .ranking-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .ranking-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+    .ranking-table tr:last-child td { border-bottom: none; }
+    .ranking-table tr { cursor: pointer; transition: background 0.15s; }
+    .ranking-table tr:hover td { background: var(--blue-light); }
+    .rank-num { width: 28px; font-size: 0.78rem; color: var(--text-sub); font-weight: 700; text-align: center; }
+    .rank-info .ticker { font-weight: 700; font-size: 0.88rem; color: var(--blue); }
+    .rank-info .name  { font-size: 0.75rem; color: var(--text-sub); margin-top: 1px; }
+    .rank-price { text-align: right; font-weight: 600; font-size: 0.88rem; white-space: nowrap; }
+    .rank-change { text-align: right; font-weight: 700; font-size: 0.9rem; white-space: nowrap; min-width: 70px; }
+
+    #ranking-loading { display: none; }
+    #ranking-error { display: none; }
+    #ranking-results { display: none; }
+
+    @media (max-width: 640px) {
+      .ranking-grid { grid-template-columns: 1fr; }
+      .ranking-header { gap: 8px; }
+      .ranking-meta { margin-left: 0; width: 100%; justify-content: space-between; }
+      .ranking-table td { padding: 8px 10px; }
+    }
+
+    /* ════════════════════════════════
+       レスポンシブ (スマホ: ~640px)
+    ════════════════════════════════ */
+    @media (max-width: 640px) {
+      /* Header */
+      header { padding: 0 16px; height: 52px; }
+      header h1 { font-size: 1.05rem; }
+      .header-logo .dot { width: 8px; height: 8px; }
+
+      /* Tabs */
+      .tab-nav { padding: 0 16px; }
+      .tab-btn { padding: 10px 16px; font-size: 0.85rem; }
+
+      /* Main */
+      main { padding: 16px; }
+
+      /* Hero search */
+      #search-area { padding: 40px 16px 32px; }
+      .search-hero-title { font-size: 1.45rem; }
+      .search-hero-sub { font-size: 0.85rem; margin-bottom: 20px; }
+      .search-row { flex-direction: column; gap: 10px; }
+      .search-row input { padding: 13px 16px; font-size: 0.95rem; }
+      .search-row select { padding: 11px 12px; font-size: 0.9rem; width: 100%; }
+      .search-row button { padding: 13px; font-size: 0.95rem; width: 100%; }
+
+      /* Compact search */
+      #search-area.compact { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px; }
+      #search-area.compact .search-row { flex-direction: row; flex-wrap: wrap; }
+      #search-area.compact .search-row input { min-width: 0; flex: 1; }
+      #search-area.compact .search-row select { width: auto; }
+      #search-area.compact .search-row button { flex-shrink: 0; }
+
+      /* Examples */
+      .examples { gap: 6px; }
+      .examples span { font-size: 0.78rem; padding: 5px 12px; }
+
+      /* Cards */
+      .card { padding: 14px 16px; margin-bottom: 12px; border-radius: 10px; }
+      .card-accent-blue, .card-accent-cyan { border-left-width: 3px; }
+
+      /* Stock header */
+      .stock-header .name { font-size: 1.1rem; }
+      .stock-header .price { font-size: 1.6rem; }
+      .stock-header .ticker-badge { font-size: 0.75rem; margin-left: 6px; }
+
+      /* Metrics grid: 2列 */
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .metric-card { padding: 10px 12px; }
+      .metric-card .value { font-size: 0.95rem; }
+
+      /* Predict */
+      .predict-controls { gap: 8px; }
+      .predict-controls select { font-size: 0.85rem; }
+      .predict-controls button { width: 100%; padding: 10px; }
+      .predict-result { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .pred-card { padding: 10px 12px; }
+
+      /* Compare input */
+      .compare-input-area { padding: 14px 16px; }
+      .compare-add-row { flex-direction: column; align-items: stretch; gap: 8px; }
+      .compare-add-row input { width: 100%; }
+      .btn-add, .btn-compare { width: 100%; padding: 10px; text-align: center; }
+      .compare-add-row select { width: 100%; }
+      .example-sets { font-size: 0.75rem; }
+      .example-sets span { display: inline-block; margin: 2px 4px; }
+
+      /* Compare table */
+      .compare-table th, .compare-table td { padding: 7px 10px; font-size: 0.8rem; }
+
+      /* Correlation */
+      .corr-cell { width: 52px; height: 40px; font-size: 0.72rem; }
+
+      /* Spinner */
+      .spinner-wrap { padding: 40px 16px; }
+
+      /* Summary */
+      .summary-card p { font-size: 0.83rem; }
+    }
+
+    /* タブレット (641px ~ 900px) */
+    @media (min-width: 641px) and (max-width: 900px) {
+      main { padding: 20px 20px; }
+      header { padding: 0 20px; }
+      .tab-nav { padding: 0 20px; }
+      .search-hero-title { font-size: 1.7rem; }
+      .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+      .search-row { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">
+    <div class="dot"></div>
+    <h1>KABUTracker</h1>
+  </div>
+</header>
+
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('analyze')">銘柄分析</button>
+  <button class="tab-btn" onclick="switchTab('compare')">銘柄比較</button>
+  <button class="tab-btn" onclick="switchTab('ranking')">上昇・下落ランキング</button>
+</div>
+
+<main>
+
+  <!-- ═══ 銘柄分析セクション ═══ -->
+  <div class="section active" id="section-analyze">
+    <div class="error-msg" id="error-msg" style="display:none"></div>
+
+    <div id="search-area">
+      <h2 class="search-hero-title">銘柄を分析する</h2>
+      <p class="search-hero-sub">
+        ティッカーシンボルを入力して、株価チャートや各種指標を確認できます。<br>
+        日本株は末尾に <strong>.T</strong> を付けてください（例: 7203.T）
+      </p>
+      <div class="search-row">
+        <input type="text" id="ticker-input" placeholder="例: AAPL, 7203.T" />
+        <select id="period-select">
+          <option value="1mo">1ヶ月</option>
+          <option value="3mo">3ヶ月</option>
+          <option value="6mo" selected>6ヶ月</option>
+          <option value="1y">1年</option>
+          <option value="2y">2年</option>
+          <option value="5y">5年</option>
+        </select>
+        <button onclick="analyze()">分析</button>
+      </div>
+      <div class="examples">
+        <span onclick="quickSearch('AAPL')">AAPL (Apple)</span>
+        <span onclick="quickSearch('MSFT')">MSFT (Microsoft)</span>
+        <span onclick="quickSearch('NVDA')">NVDA (NVIDIA)</span>
+        <span onclick="quickSearch('7203.T')">7203.T (トヨタ)</span>
+        <span onclick="quickSearch('9984.T')">9984.T (ソフトバンクG)</span>
+        <span onclick="quickSearch('6758.T')">6758.T (ソニー)</span>
+      </div>
+    </div>
+
+    <div class="spinner-wrap" id="loading" style="display:none">
+      <div class="spinner"></div>
+      <p>データを取得しています...</p>
+    </div>
+
+    <div class="stock-header card card-accent-blue" id="stock-header">
+      <div>
+        <span class="name" id="sh-name"></span>
+        <span class="ticker-badge" id="sh-ticker"></span>
+      </div>
+      <div class="meta" id="sh-meta"></div>
+      <div class="price-row">
+        <span class="price" id="sh-price"></span>
+        <span class="change" id="sh-change"></span>
+      </div>
+    </div>
+
+    <div class="metrics-grid" id="metrics-grid"></div>
+
+    <div id="chart-container" class="card" style="display:none">
+      <div class="chart-toolbar">
+        <button class="chart-type-btn active" id="btn-daily" onclick="switchChart('daily')">日足</button>
+        <button class="chart-type-btn" id="btn-intraday" onclick="switchChart('intraday')">5分足</button>
+        <div class="intraday-period" id="intraday-period">
+          <button class="active" id="ip-1d" onclick="loadIntraday('1d')">1日</button>
+          <button id="ip-3d" onclick="loadIntraday('3d')">3日</button>
+          <button id="ip-5d" onclick="loadIntraday('5d')">5日</button>
+        </div>
+      </div>
+      <div class="chart-loading" id="chart-loading">
+        <div class="spinner" style="width:28px;height:28px;margin:0 auto 10px"></div>
+        読み込み中...
+      </div>
+      <div id="chart"></div>
+    </div>
+
+    <div class="predict-panel card card-accent-cyan" id="predict-panel">
+      <h3 class="cyan">株価予測 (多項式回帰モデル)</h3>
+      <div class="predict-controls">
+        <label>予測期間:</label>
+        <select id="predict-days">
+          <option value="30">30日</option>
+          <option value="60">60日</option>
+          <option value="90">90日</option>
+        </select>
+        <label>学習期間:</label>
+        <select id="predict-base">
+          <option value="6mo">6ヶ月</option>
+          <option value="1y" selected>1年</option>
+          <option value="2y">2年</option>
+        </select>
+        <button onclick="runPredict()">予測実行</button>
+      </div>
+      <div class="pred-loading" id="pred-loading">予測計算中...</div>
+      <div class="predict-result" id="predict-result"></div>
+    </div>
+
+    <div class="summary-card card" id="summary-card">
+      <h3 class="blue">企業概要</h3>
+      <p id="summary-text"></p>
+    </div>
+  </div>
+
+  <!-- ═══ 銘柄比較セクション ═══ -->
+  <div class="section" id="section-compare">
+
+    <div class="compare-input-area">
+      <h3>比較銘柄を追加 (最大5銘柄)</h3>
+      <div class="ticker-chips" id="ticker-chips"></div>
+      <div class="compare-add-row">
+        <input type="text" id="compare-ticker-input" placeholder="例: AAPL, 7203.T" maxlength="12" />
+        <button class="btn-add" onclick="addTicker()">+ 追加</button>
+        <select id="compare-period">
+          <option value="3mo">3ヶ月</option>
+          <option value="6mo">6ヶ月</option>
+          <option value="1y" selected>1年</option>
+          <option value="2y">2年</option>
+          <option value="5y">5年</option>
+        </select>
+        <button class="btn-compare" onclick="runCompare()">比較実行</button>
+      </div>
+      <div class="example-sets">
+        例:
+        <span onclick="setExample(['AAPL','MSFT','GOOGL','AMZN'])">GAFA比較</span>
+        <span onclick="setExample(['NVDA','AMD','INTC'])">半導体3社</span>
+        <span onclick="setExample(['7203.T','7267.T','7201.T'])">国内自動車</span>
+        <span onclick="setExample(['SPY','QQQ','DIA'])">ETF比較</span>
+      </div>
+    </div>
+
+    <div class="error-msg" id="compare-error"></div>
+
+    <div class="spinner-wrap" id="compare-loading">
+      <div class="spinner"></div>
+      <p>データを取得しています...</p>
+    </div>
+
+    <div id="compare-results">
+      <!-- パフォーマンスチャート -->
+      <div class="card" id="perf-chart-container" style="padding:8px">
+        <div id="perf-chart"></div>
+      </div>
+
+      <!-- 指標比較テーブル -->
+      <div class="card">
+        <h3 class="blue">指標比較</h3>
+        <div class="compare-table-wrap">
+          <table class="compare-table" id="compare-table"></table>
+        </div>
+      </div>
+
+      <!-- 相関係数 -->
+      <div class="card card-accent-blue" id="corr-card" style="display:none">
+        <h3 class="blue">リターン相関係数</h3>
+        <div id="corr-container"></div>
+        <p style="font-size:0.78rem;color:var(--text-sub);margin-top:12px">
+          日次リターンのピアソン相関係数。1.0 = 完全に同じ動き、0 = 無相関、-1.0 = 逆の動き
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ ランキングセクション ═══ -->
+  <div class="section" id="section-ranking">
+
+    <div class="ranking-header">
+      <div class="market-tabs">
+        <button class="market-tab active" id="tab-jp" onclick="switchMarket('jp')">日本株</button>
+        <button class="market-tab" id="tab-us" onclick="switchMarket('us')">米国株</button>
+      </div>
+      <div class="ranking-meta">
+        <span id="ranking-updated"></span>
+        <button class="btn-refresh" id="btn-refresh" onclick="loadRanking(true)">更新</button>
+      </div>
+    </div>
+
+    <div class="error-msg" id="ranking-error"></div>
+
+    <div class="spinner-wrap" id="ranking-loading">
+      <div class="spinner"></div>
+      <p>データを取得しています... (初回は20〜30秒かかる場合があります)</p>
+    </div>
+
+    <div id="ranking-results">
+      <div class="ranking-grid">
+        <div class="ranking-card">
+          <div class="ranking-card-header gainers">
+            <span class="icon">▲</span> 上昇ランキング TOP10
+          </div>
+          <table class="ranking-table" id="gainers-table"></table>
+        </div>
+        <div class="ranking-card">
+          <div class="ranking-card-header losers">
+            <span class="icon">▼</span> 下落ランキング TOP10
+          </div>
+          <table class="ranking-table" id="losers-table"></table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script>
+  /* ════════════════════════════════
+     Tab navigation
+  ════════════════════════════════ */
+  function switchTab(tab) {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+    document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add("active");
+    document.getElementById(`section-${tab}`).classList.add("active");
+    if (tab === "ranking" && document.getElementById("ranking-results").style.display === "none"
+        && document.getElementById("ranking-loading").style.display === "none") {
+      loadRanking(false);
+    }
+  }
+
+  /* ════════════════════════════════
+     銘柄分析
+  ════════════════════════════════ */
+  let currentTicker = "";
+
+  document.getElementById("ticker-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") analyze();
+  });
+
+  function quickSearch(ticker) {
+    document.getElementById("ticker-input").value = ticker;
+    analyze();
+  }
+
+  function analyze() {
+    const ticker = document.getElementById("ticker-input").value.trim().toUpperCase();
+    const period = document.getElementById("period-select").value;
+    if (!ticker) return;
+    currentTicker = ticker;
+    showLoading();
+
+    fetch(`/api/analyze?ticker=${encodeURIComponent(ticker)}&period=${period}`)
+      .then(r => r.json())
+      .then(data => {
+        hideLoading();
+        if (data.error) { showError(data.error); return; }
+        clearError();
+        renderResult(ticker, data);
+      })
+      .catch(() => { hideLoading(); showError("ネットワークエラーが発生しました"); });
+  }
+
+  function renderResult(ticker, data) {
+    const m = data.metrics;
+
+    document.getElementById("sh-name").textContent = m.name || ticker;
+    document.getElementById("sh-ticker").textContent = ticker;
+    document.getElementById("sh-meta").textContent =
+      [m.sector, m.industry].filter(x => x && x !== "N/A").join(" / ");
+    document.getElementById("sh-price").textContent = m.price;
+
+    const changeEl = document.getElementById("sh-change");
+    const sign = m.change_positive === true ? "+" : "";
+    changeEl.textContent = `${sign}${m.change} (${sign}${m.change_pct})`;
+    changeEl.className = "change " + (m.change_positive ? "positive" : "negative");
+
+    document.getElementById("stock-header").style.display = "block";
+    document.getElementById("search-area").classList.add("compact");
+
+    const metrics = [
+      { label: "時価総額", value: m.market_cap },
+      { label: "PER (実績)", value: m.pe_ratio },
+      { label: "PER (予想)", value: m.forward_pe },
+      { label: "EPS", value: m.eps },
+      { label: "配当利回り", value: m.dividend_yield },
+      { label: "52週高値", value: m.week_52_high },
+      { label: "52週安値", value: m.week_52_low },
+      { label: "平均出来高", value: m.avg_volume },
+      { label: "ベータ値", value: m.beta },
+      { label: "ROE", value: m.roe },
+      { label: "D/E比率", value: m.debt_to_equity },
+      { label: "利益率", value: m.profit_margin },
+      { label: "売上高", value: m.revenue },
+    ];
+    const grid = document.getElementById("metrics-grid");
+    grid.innerHTML = metrics.map(item => `
+      <div class="metric-card">
+        <div class="label">${item.label}</div>
+        <div class="value">${item.value || "N/A"}</div>
+      </div>
+    `).join("");
+    grid.style.display = "grid";
+
+    dailyChartData = data.chart;
+    // 日足ボタンをリセット
+    document.getElementById("btn-daily").classList.add("active");
+    document.getElementById("btn-intraday").classList.remove("active");
+    document.getElementById("intraday-period").classList.remove("show");
+
+    const chartDiv = document.getElementById("chart");
+    chartDiv.style.display = "block";
+    Plotly.newPlot(chartDiv, data.chart.data, data.chart.layout, {
+      responsive: true, displayModeBar: true, displaylogo: false,
+      modeBarButtonsToRemove: ["select2d", "lasso2d"]
+    });
+    document.getElementById("chart-container").style.display = "block";
+
+    if (m.summary) {
+      document.getElementById("summary-text").textContent = m.summary;
+      document.getElementById("summary-card").style.display = "block";
+    }
+    document.getElementById("predict-panel").style.display = "block";
+    document.getElementById("predict-result").className = "predict-result";
+  }
+
+  /* ── Chart type switching ── */
+  let dailyChartData = null;
+  let currentIntradayPeriod = "1d";
+
+  function switchChart(type) {
+    document.getElementById("btn-daily").classList.toggle("active", type === "daily");
+    document.getElementById("btn-intraday").classList.toggle("active", type === "intraday");
+    document.getElementById("intraday-period").classList.toggle("show", type === "intraday");
+
+    if (type === "daily") {
+      if (dailyChartData) {
+        Plotly.newPlot("chart", dailyChartData.data, dailyChartData.layout, {
+          responsive: true, displayModeBar: true, displaylogo: false,
+          modeBarButtonsToRemove: ["select2d", "lasso2d"]
+        });
+      }
+    } else {
+      loadIntraday(currentIntradayPeriod);
+    }
+  }
+
+  function loadIntraday(period) {
+    if (!currentTicker) return;
+    currentIntradayPeriod = period;
+
+    // ボタンのアクティブ状態を更新
+    ["1d","3d","5d"].forEach(p => {
+      document.getElementById(`ip-${p}`).classList.toggle("active", p === period);
+    });
+
+    document.getElementById("chart-loading").style.display = "block";
+    document.getElementById("chart").style.display = "none";
+
+    fetch(`/api/intraday?ticker=${encodeURIComponent(currentTicker)}&period=${period}`)
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById("chart-loading").style.display = "none";
+        document.getElementById("chart").style.display = "block";
+        if (data.error) { alert(data.error); switchChart("daily"); return; }
+        Plotly.newPlot("chart", data.chart.data, data.chart.layout, {
+          responsive: true, displayModeBar: true, displaylogo: false,
+          modeBarButtonsToRemove: ["select2d", "lasso2d"]
+        });
+      })
+      .catch(() => {
+        document.getElementById("chart-loading").style.display = "none";
+        document.getElementById("chart").style.display = "block";
+        alert("5分足データの取得に失敗しました");
+        switchChart("daily");
+      });
+  }
+
+  function runPredict() {
+    if (!currentTicker) return;
+    const days = document.getElementById("predict-days").value;
+    const period = document.getElementById("predict-base").value;
+    document.getElementById("pred-loading").style.display = "block";
+    document.getElementById("predict-result").className = "predict-result";
+
+    fetch(`/api/predict?ticker=${encodeURIComponent(currentTicker)}&days=${days}&period=${period}`)
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById("pred-loading").style.display = "none";
+        if (data.error) { alert(data.error); return; }
+        renderPrediction(data);
+      })
+      .catch(() => { document.getElementById("pred-loading").style.display = "none"; alert("予測エラー"); });
+  }
+
+  function renderPrediction(data) {
+    const sign = data.change_pct >= 0 ? "+" : "";
+    const color = data.change_pct >= 0 ? "#16a34a" : "#dc2626";
+    const cards = [
+      { label: "現在株価", value: data.last_price.toLocaleString() },
+      { label: `${data.days}日後の予測価格`, value: data.pred_price.toLocaleString(), highlight: color },
+      { label: "予測変化率", value: `${sign}${data.change_pct}%`, highlight: color },
+      { label: "予測上限 (95%CI)", value: data.upper[data.upper.length - 1].toLocaleString() },
+      { label: "予測下限 (95%CI)", value: data.lower[data.lower.length - 1].toLocaleString() },
+    ];
+    const result = document.getElementById("predict-result");
+    result.innerHTML = cards.map(c => `
+      <div class="pred-card">
+        <div class="label">${c.label}</div>
+        <div class="value" style="${c.highlight ? `color:${c.highlight}` : ''}">${c.value}</div>
+      </div>
+    `).join("");
+    result.className = "predict-result show";
+
+    const chartDiv = document.getElementById("chart");
+    Plotly.addTraces(chartDiv, [
+      {
+        x: [...data.dates, ...data.dates.slice().reverse()],
+        y: [...data.upper, ...data.lower.slice().reverse()],
+        fill: "toself", fillcolor: "rgba(8,145,178,0.1)",
+        line: { color: "transparent" }, name: "予測95%CI", showlegend: true, hoverinfo: "skip",
+        xaxis: "x", yaxis: "y",
+      },
+      { x: data.dates, y: data.pred, mode: "lines", name: "予測 (回帰)", line: { color: "#0891b2", width: 2, dash: "dot" }, xaxis: "x", yaxis: "y" },
+      { x: data.dates, y: data.upper, mode: "lines", name: "上限", line: { color: "#0891b2", width: 1, dash: "dash" }, showlegend: false, xaxis: "x", yaxis: "y" },
+      { x: data.dates, y: data.lower, mode: "lines", name: "下限", line: { color: "#dc2626", width: 1, dash: "dash" }, showlegend: false, xaxis: "x", yaxis: "y" },
+    ]);
+  }
+
+  function showLoading() {
+    document.getElementById("loading").style.display = "block";
+    ["stock-header","metrics-grid","chart-container","predict-panel","summary-card"]
+      .forEach(id => document.getElementById(id).style.display = "none");
+    clearError();
+  }
+  function hideLoading() { document.getElementById("loading").style.display = "none"; }
+  function showError(msg) {
+    const el = document.getElementById("error-msg");
+    el.textContent = msg; el.style.display = "block";
+    document.getElementById("search-area").classList.remove("compact");
+  }
+  function clearError() { document.getElementById("error-msg").style.display = "none"; }
+
+  /* ════════════════════════════════
+     銘柄比較
+  ════════════════════════════════ */
+  const CHIP_COLORS = ["#2563eb","#dc2626","#16a34a","#f59e0b","#7c3aed"];
+  let compareTickers = [];
+
+  document.getElementById("compare-ticker-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") addTicker();
+  });
+
+  function addTicker() {
+    const val = document.getElementById("compare-ticker-input").value.trim().toUpperCase();
+    if (!val) return;
+    if (compareTickers.includes(val)) {
+      document.getElementById("compare-ticker-input").value = "";
+      return;
+    }
+    if (compareTickers.length >= 5) { alert("最大5銘柄までです"); return; }
+    compareTickers.push(val);
+    document.getElementById("compare-ticker-input").value = "";
+    renderChips();
+  }
+
+  function removeTicker(ticker) {
+    compareTickers = compareTickers.filter(t => t !== ticker);
+    renderChips();
+  }
+
+  function renderChips() {
+    const container = document.getElementById("ticker-chips");
+    if (compareTickers.length === 0) {
+      container.innerHTML = '<span style="color:var(--text-sub);font-size:0.83rem">銘柄を追加してください</span>';
+      return;
+    }
+    container.innerHTML = compareTickers.map((t, i) => `
+      <div class="chip" style="background:${CHIP_COLORS[i % CHIP_COLORS.length]}">
+        ${t}
+        <span class="remove" onclick="removeTicker('${t}')">&times;</span>
+      </div>
+    `).join("");
+  }
+
+  function setExample(tickers) {
+    compareTickers = tickers.slice(0, 5);
+    renderChips();
+  }
+
+  function runCompare() {
+    if (compareTickers.length < 2) { alert("2銘柄以上追加してください"); return; }
+    const period = document.getElementById("compare-period").value;
+
+    document.getElementById("compare-loading").style.display = "block";
+    document.getElementById("compare-results").style.display = "none";
+    document.getElementById("compare-error").style.display = "none";
+
+    fetch(`/api/compare?tickers=${encodeURIComponent(compareTickers.join(","))}&period=${period}`)
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById("compare-loading").style.display = "none";
+        if (data.error) {
+          const el = document.getElementById("compare-error");
+          el.textContent = data.error; el.style.display = "block";
+          return;
+        }
+        renderCompare(data);
+      })
+      .catch(() => {
+        document.getElementById("compare-loading").style.display = "none";
+        const el = document.getElementById("compare-error");
+        el.textContent = "ネットワークエラーが発生しました"; el.style.display = "block";
+      });
+  }
+
+  function renderCompare(data) {
+    // パフォーマンスチャート
+    Plotly.newPlot("perf-chart", data.chart.data, data.chart.layout, {
+      responsive: true, displayModeBar: true, displaylogo: false,
+      modeBarButtonsToRemove: ["select2d","lasso2d"]
+    });
+
+    // 指標比較テーブル
+    const stocks = data.stocks;
+    const rows = [
+      { label: "期間リターン", key: "period_return", suffix: "%", numeric: true },
+      { label: "現在株価", key: "price" },
+      { label: "時価総額", key: "market_cap" },
+      { label: "PER (実績)", key: "pe_ratio", numeric: true },
+      { label: "PER (予想)", key: "forward_pe", numeric: true },
+      { label: "EPS", key: "eps" },
+      { label: "配当利回り", key: "dividend_yield" },
+      { label: "52週高値", key: "week_52_high" },
+      { label: "52週安値", key: "week_52_low" },
+      { label: "ベータ値", key: "beta", numeric: true },
+      { label: "ROE", key: "roe" },
+      { label: "利益率", key: "profit_margin" },
+    ];
+
+    let html = "<thead><tr><th>指標</th>";
+    stocks.forEach(s => {
+      html += `<th class="stock-col">
+        <div class="stock-header-cell">
+          <div class="stock-dot" style="background:${s.color}"></div>
+          <strong>${s.ticker}</strong>
+          <span class="stock-name-sm">${(s.name || "").substring(0, 16)}</span>
+        </div>
+      </th>`;
+    });
+    html += "</tr></thead><tbody>";
+
+    rows.forEach(row => {
+      html += `<tr><td class="row-label">${row.label}</td>`;
+      const vals = stocks.map(s => {
+        const raw = s[row.key];
+        if (row.key === "period_return") return raw;
+        return raw;
+      });
+
+      // 数値行はベスト/ワースト強調
+      let numericVals = [];
+      if (row.numeric) {
+        numericVals = vals.map(v => {
+          if (v === null || v === undefined || v === "N/A") return null;
+          const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+          return isNaN(n) ? null : n;
+        });
+      }
+      const validNums = numericVals.filter(v => v !== null);
+      const maxVal = validNums.length ? Math.max(...validNums) : null;
+      const minVal = validNums.length ? Math.min(...validNums) : null;
+
+      stocks.forEach((s, i) => {
+        let displayVal = s[row.key];
+        if (row.key === "period_return") {
+          const v = s.period_return;
+          const sign = v >= 0 ? "+" : "";
+          const cls = v >= 0 ? "positive" : "negative";
+          displayVal = `<span class="${cls}">${sign}${v}%</span>`;
+        } else if (displayVal === null || displayVal === undefined) {
+          displayVal = "N/A";
+        }
+
+        let cls = "";
+        if (row.numeric && numericVals[i] !== null) {
+          if (numericVals[i] === maxVal && maxVal !== minVal) cls = "best";
+          else if (numericVals[i] === minVal && maxVal !== minVal) cls = "worst";
+        }
+        html += `<td class="${cls}">${displayVal}</td>`;
+      });
+      html += "</tr>";
+    });
+
+    html += "</tbody>";
+    document.getElementById("compare-table").innerHTML = html;
+
+    // 相関係数
+    if (data.correlation) {
+      renderCorrelation(data.correlation);
+      document.getElementById("corr-card").style.display = "block";
+    }
+
+    document.getElementById("compare-results").style.display = "block";
+  }
+
+  function renderCorrelation(corr) {
+    const tickers = corr.tickers;
+    const matrix = corr.matrix;
+    const n = tickers.length;
+
+    // 色: -1=赤, 0=白, 1=青
+    function corrColor(v) {
+      if (v >= 0) {
+        const t = v;
+        const r = Math.round(255 - t * (255 - 37));
+        const g = Math.round(255 - t * (255 - 99));
+        const b = Math.round(255 - t * (255 - 235));
+        return `rgb(${r},${g},${b})`;
+      } else {
+        const t = -v;
+        const r = Math.round(255 - t * (255 - 220));
+        const g = Math.round(255 - t * 255);
+        const b = Math.round(255 - t * 255);
+        return `rgb(${r},${g},${b})`;
+      }
+    }
+
+    let html = `<div class="corr-grid" style="grid-template-columns: auto repeat(${n}, 1fr); gap:3px">`;
+    // header row
+    html += `<div></div>`;
+    tickers.forEach(t => { html += `<div style="text-align:center;font-size:0.75rem;font-weight:700;padding:4px">${t}</div>`; });
+    // data rows
+    tickers.forEach((rowT, i) => {
+      html += `<div style="display:flex;align-items:center;font-size:0.75rem;font-weight:700;padding-right:8px">${rowT}</div>`;
+      matrix[i].forEach((v, j) => {
+        const bg = corrColor(v);
+        const textColor = Math.abs(v) > 0.5 ? "#fff" : "#1a202c";
+        html += `<div class="corr-cell" style="background:${bg};color:${textColor}">
+          <span>${v.toFixed(2)}</span>
+        </div>`;
+      });
+    });
+    html += "</div>";
+    document.getElementById("corr-container").innerHTML = html;
+  }
+
+  // 初期化
+  renderChips();
+
+  /* ════════════════════════════════
+     ランキング
+  ════════════════════════════════ */
+  let currentMarket = "jp";
+
+  function switchMarket(market) {
+    currentMarket = market;
+    document.getElementById("tab-jp").classList.toggle("active", market === "jp");
+    document.getElementById("tab-us").classList.toggle("active", market === "us");
+    loadRanking(false);
+  }
+
+  function loadRanking(force) {
+    document.getElementById("ranking-loading").style.display = "block";
+    document.getElementById("ranking-results").style.display = "none";
+    document.getElementById("ranking-error").style.display = "none";
+    document.getElementById("ranking-updated").textContent = "";
+    const btn = document.getElementById("btn-refresh");
+    btn.disabled = true;
+
+    const url = `/api/ranking?market=${currentMarket}&force=${force ? 1 : 0}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById("ranking-loading").style.display = "none";
+        btn.disabled = false;
+        if (data.error) {
+          const el = document.getElementById("ranking-error");
+          el.textContent = data.error; el.style.display = "block";
+          return;
+        }
+        renderRanking(data);
+      })
+      .catch(() => {
+        document.getElementById("ranking-loading").style.display = "none";
+        btn.disabled = false;
+        const el = document.getElementById("ranking-error");
+        el.textContent = "データ取得に失敗しました"; el.style.display = "block";
+      });
+  }
+
+  function renderRanking(data) {
+    document.getElementById("ranking-updated").textContent = `更新: ${data.updated_at}`;
+    renderRankTable("gainers-table", data.gainers, true);
+    renderRankTable("losers-table",  data.losers,  false);
+    document.getElementById("ranking-results").style.display = "block";
+  }
+
+  function renderRankTable(tableId, stocks, isGainer) {
+    const tbody = stocks.map((s, i) => {
+      const sign = s.change_pct >= 0 ? "+" : "";
+      const cls  = s.change_pct >= 0 ? "positive" : "negative";
+      return `<tr onclick="goToAnalyze('${s.ticker}')">
+        <td class="rank-num">${i + 1}</td>
+        <td class="rank-info">
+          <div class="ticker">${s.ticker}</div>
+          <div class="name">${s.name}</div>
+        </td>
+        <td class="rank-price">${s.price.toLocaleString()}</td>
+        <td class="rank-change ${cls}">${sign}${s.change_pct.toFixed(2)}%</td>
+      </tr>`;
+    }).join("");
+    document.getElementById(tableId).innerHTML = `<tbody>${tbody}</tbody>`;
+  }
+
+  function goToAnalyze(ticker) {
+    switchTab("analyze");
+    document.getElementById("ticker-input").value = ticker;
+    analyze();
+  }
+</script>
+</body>
+</html>
