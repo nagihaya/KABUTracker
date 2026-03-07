@@ -57,7 +57,8 @@
     .search-hero-sub strong { color: var(--blue); }
     #search-area.compact .search-hero-title,
     #search-area.compact .search-hero-sub,
-    #search-area.compact .examples { display: none; }
+    #search-area.compact .examples,
+    #search-area.compact .search-history { display: none; }
 
     .search-row { display: flex; gap: 8px; width: 100%; max-width: 600px; }
     #search-area.compact .search-row { max-width: none; flex: 1; }
@@ -144,6 +145,25 @@
       padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 0.83rem; transition: all 0.2s;
     }
     .examples span:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+    .search-history {
+      margin-top: 16px; display: flex; align-items: center;
+      gap: 8px; flex-wrap: wrap; justify-content: center;
+    }
+    .search-history .history-label {
+      font-size: 0.78rem; color: var(--text-sub); white-space: nowrap;
+    }
+    .history-chip {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--blue-light); border: 1.5px solid var(--blue-mid);
+      color: var(--blue); padding: 4px 12px; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .history-chip:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .history-chip .del {
+      font-size: 0.9rem; opacity: 0.6; margin-left: 2px; line-height: 1;
+    }
+    .history-chip:hover .del { opacity: 1; }
 
     .stock-header { display: none; }
     .stock-header.card { border-left: 4px solid var(--blue); }
@@ -509,6 +529,7 @@
         <span onclick="quickSearch('9984.T')">9984.T (ソフトバンクG)</span>
         <span onclick="quickSearch('6758.T')">6758.T (ソニー)</span>
       </div>
+      <div class="search-history" id="search-history"></div>
     </div>
 
     <div class="spinner-wrap" id="loading" style="display:none">
@@ -696,6 +717,43 @@
   ════════════════════════════════ */
   let currentTicker = "";
 
+  /* ── 検索履歴 (localStorage) ── */
+  const HISTORY_KEY = "kabu_history";
+  const HISTORY_MAX = 3;
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveHistory(ticker) {
+    let history = loadHistory().filter(t => t !== ticker);
+    history.unshift(ticker);
+    history = history.slice(0, HISTORY_MAX);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    renderHistory();
+  }
+
+  function deleteHistory(ticker, e) {
+    e.stopPropagation();
+    const history = loadHistory().filter(t => t !== ticker);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const history = loadHistory();
+    const el = document.getElementById("search-history");
+    if (history.length === 0) { el.innerHTML = ""; return; }
+    el.innerHTML = `<span class="history-label">履歴:</span>` +
+      history.map(t => `
+        <div class="history-chip" onclick="quickSearch('${t}')">
+          ${t}
+          <span class="del" onclick="deleteHistory('${t}', event)">&times;</span>
+        </div>
+      `).join("");
+  }
+
   document.getElementById("ticker-input").addEventListener("keydown", e => {
     if (e.key === "Enter") analyze();
   });
@@ -718,6 +776,7 @@
         hideLoading();
         if (data.error) { showError(data.error); return; }
         clearError();
+        saveHistory(ticker);
         renderResult(ticker, data);
       })
       .catch(() => { hideLoading(); showError("ネットワークエラーが発生しました"); });
@@ -1109,6 +1168,7 @@
 
   // 初期化
   renderChips();
+  renderHistory();
 
   /* ════════════════════════════════
      ランキング
